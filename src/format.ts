@@ -46,6 +46,15 @@ export function apiErrorToText(err: unknown, api: SnapDeployApi): string {
     return "RATE LIMITED (429). Wait at least 60 seconds before the next call; do not tight-loop.";
   }
 
+  if (err.status === 403 && b.error === "INSUFFICIENT_SCOPE") {
+    const need = b.requiredScope ?? "a higher";
+    return (
+      `REFUSED (403): this token does not have the '${need}' scope needed for that action. ` +
+      `Tell the user to create a token with the '${need}' scope on the API Keys page (scopes nest: read ⊂ deploy ⊂ manage) ` +
+      `and update the connector's SNAPDEPLOY_API_KEY. Do not retry with this token.`
+    );
+  }
+
   if (err.status === 403 && (b.error === "INTERACTIVE_SESSION_REQUIRED" || /interactive/i.test(msg))) {
     return (
       "REFUSED (403): this action is deliberately impossible for API keys and agents. " +
