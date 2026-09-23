@@ -244,26 +244,29 @@ export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config
           const trig = await api.post(`/api/mobile/github/link/${linkId}/deploy`);
           deploymentId = trig?.deploymentId;
         } else {
-          await api.post(`/api/mobile/github/link`, {
+          const linked = await api.post(`/api/mobile/github/link`, {
             containerId,
             repoFullName: repo,
             deployBranch: branch,
             port,
           });
+          deploymentId = linked?.deploymentId;
         }
       } else {
         const created = await api.post(`/api/mobile/containers`, {
           name: wanted,
+          image: "pending", // GitHub-deploy placeholder — the build supplies the real image
           port,
           environmentVariables: env,
         });
         containerId = created.containerId ?? created.id;
-        await api.post(`/api/mobile/github/link`, {
+        const linked = await api.post(`/api/mobile/github/link`, {
           containerId,
           repoFullName: repo,
           deployBranch: branch,
           port,
         });
+        deploymentId = linked?.deploymentId; // /link triggers the initial build itself
       }
 
       // Linking triggers the initial build itself; find the deployment to watch.
