@@ -24,9 +24,24 @@ const cid = (c: any): string => c.containerId ?? c.id;
 
 function capLine(cap: any): string {
   if (!cap) return "";
-  if (cap.capped === false || cap.dailyLimit <= 0) return "Deploy limit: none on this plan.";
+  // capped:false / remaining:-1 is the server's "exempt" state: an active
+  // Always-On or Sprint entitlement lifts the limit account-wide. dailyLimit
+  // still reads 5 in that state — never quote it to an uncapped user.
+  if (cap.capped === false || cap.remaining === -1 || cap.dailyLimit <= 0) {
+    return "Deploy limit: NONE — this account has an active Always-On or Sprint entitlement, so the free tier's 5-per-12h limit does not apply. Deploy freely.";
+  }
   const reset = cap.timeUntilReset ? ` (resets in ${cap.timeUntilReset})` : "";
   return `Deploy limit: ${cap.remaining} of ${cap.dailyLimit} left${reset} — failed attempts count too.`;
+}
+
+/** "FREE" alone misleads: Always-On is a per-container subscription, not a plan. */
+function planLine(boot: any): string {
+  const plan = boot.user?.plan ?? "?";
+  const aoCount = (boot.containers ?? []).filter((c: any) => c.alwaysOn === true).length;
+  const exempt = boot.deployCap && (boot.deployCap.capped === false || boot.deployCap.remaining === -1);
+  if (aoCount > 0) return `${plan} plan + Always-On active on ${aoCount} container(s) (SnapDeploy sells per-container subscriptions, not account plans)`;
+  if (exempt) return `${plan} plan + an active Always-On/Sprint entitlement`;
+  return `${plan} plan`;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -61,9 +76,9 @@ export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config
     async () => {
       const boot = await api.get("/api/mobile/bootstrap");
       const out = {
-        plan: boot.user?.plan,
+        plan: planLine(boot),
+        deployLimit: capLine(boot.deployCap),
         containers: boot.containers,
-        deployCap: boot.deployCap,
         freeHours: boot.usage,
       };
       return toJson(out);
@@ -121,7 +136,7 @@ export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config
 
   tool(
     "check_quota",
-    "Can the user deploy and run apps right now? Merges the deploy limit (5 per 12h free, failed attempts count) and the free-hours cap (containers refuse to start at 402 when exhausted), plus any unassigned Always-On subscriptions.",
+    "Can the user deploy and run apps right now? Merges the deploy limit (5 per rolling 12h — ONLY for accounts without an Always-On/Sprint entitlement; failed attempts count) and the free-hours cap (containers refuse to start at 402 when exhausted), plus any unassigned Always-On subscriptions.",
     {},
     false,
     async () => {
@@ -136,7 +151,7 @@ export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config
       }
       const usage = boot.usage ?? {};
       const lines = [
-        `Plan: ${boot.user?.plan ?? "?"}`,
+        `Plan: ${planLine(boot)}`,
         capLine(cap),
         usage.hoursLimit === -1
           ? "Free-hours cap: none (paid entitlement active)."
@@ -198,7 +213,7 @@ export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config
 
   tool(
     "deploy",
-    "Deploy a connected GitHub repo to SnapDeploy: creates the container if needed, links the repo, builds, and waits for the result. Reply includes the live URL or, on failure, the error and build-log tail. Uses one unit of the deploy limit — failed attempts count.",
+    "Deploy a connected GitHub repo to SnapDeploy: creates the container if needed, links the repo, builds, and waits for the result. Reply includes the live URL or, on failure, the error and build-log tail. On accounts without an Always-On/Sprint entitlement this uses one unit of the deploy limit (failed attempts count); Always-On accounts are uncapped.",
     {
       repo: z.string().describe("owner/name of a repo on the user's connected GitHub"),
       container: z.string().optional().describe("Container name (default: repo name, lowercased)"),
