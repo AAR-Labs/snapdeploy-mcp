@@ -278,7 +278,11 @@ export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config
           .catch(() => null);
         const linkId = link?.repoLinkId ?? link?.id ?? link?.linkId;
         if (linkId) {
-          const trig = await api.post(`/api/mobile/github/link/${linkId}/deploy`);
+          // M1.3 retry-safe: an identical request inside the same 10-minute window
+          // (assistant retry, duplicate tool call) returns the original deployment
+          // instead of starting a second build that would burn another cap unit.
+          const idem = `${containerId}:${branch ?? "default"}:${Math.floor(Date.now() / 600_000)}`;
+          const trig = await api.post(`/api/mobile/github/link/${linkId}/deploy`, undefined, { "Idempotency-Key": idem });
           deploymentId = trig?.deploymentId;
         } else {
           const linked = await api.post(`/api/mobile/github/link`, {
@@ -290,22 +294,42 @@ export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config
           deploymentId = linked?.deploymentId;
         }
       } else {
-        const created = await api.post(`/api/mobile/containers`, {
-          name: wanted,
-          image: "pending", // GitHub-deploy placeholder — the build supplies the real image
-          port,
-          memory: spec?.memory,
-          cpu: spec?.cpu,
-          environmentVariables: env,
-        });
-        containerId = created.containerId ?? created.id;
-        const linked = await api.post(`/api/mobile/github/link`, {
-          containerId,
-          repoFullName: repo,
-          deployBranch: branch,
-          port,
-        });
-        deploymentId = linked?.deploymentId; // /link triggers the initial build itself
+        // M1.3 one-call deploy: create + link (which triggers the first build) in one
+        // round trip. Falls back to the two-step flow on 404 (server without M1.3).
+        let oneCall: any = null;
+        try {
+          oneCall = await api.post(`/api/mobile/deploy`, {
+            repo,
+            name: wanted,
+            branch,
+            env,
+            port,
+            size,
+          });
+        } catch (e) {
+          if (!(e instanceof ApiError && e.status === 404)) throw e;
+        }
+        if (oneCall?.containerId) {
+          containerId = oneCall.containerId;
+          deploymentId = oneCall.deploymentId;
+        } else {
+          const created = await api.post(`/api/mobile/containers`, {
+            name: wanted,
+            image: "pending", // GitHub-deploy placeholder — the build supplies the real image
+            port,
+            memory: spec?.memory,
+            cpu: spec?.cpu,
+            environmentVariables: env,
+          });
+          containerId = created.containerId ?? created.id;
+          const linked = await api.post(`/api/mobile/github/link`, {
+            containerId,
+            repoFullName: repo,
+            deployBranch: branch,
+            port,
+          });
+          deploymentId = linked?.deploymentId; // /link triggers the initial build itself
+        }
       }
 
       // Linking triggers the initial build itself; find the deployment to watch.

@@ -32,14 +32,14 @@ export class SnapDeployApi {
   async get(path: string): Promise<any> {
     return this.request("GET", path);
   }
-  async post(path: string, body?: unknown): Promise<any> {
-    return this.request("POST", path, body);
+  async post(path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<any> {
+    return this.request("POST", path, body, extraHeaders);
   }
   async put(path: string, body?: unknown): Promise<any> {
     return this.request("PUT", path, body);
   }
 
-  private async request(method: string, path: string, body?: unknown): Promise<any> {
+  private async request(method: string, path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<any> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 30_000);
     try {
@@ -50,6 +50,7 @@ export class SnapDeployApi {
           "Content-Type": "application/json",
           Accept: "application/json",
           "X-SnapDeploy-Client": `mcp/${this.clientName}`,
+          ...(extraHeaders ?? {}),
         },
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: controller.signal,

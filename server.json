@@ -1,0 +1,34 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.snapdeploy/mcp",
+  "description": "Deploy and manage SnapDeploy containers from your AI assistant — GitHub deploys, logs, env vars, add-ons, domains. No delete capability by design; secrets never exposed.",
+  "status": "active",
+  "repository": {
+    "url": "https://github.com/AAR-Labs/snapdeploy-mcp",
+    "source": "github"
+  },
+  "version_detail": {
+    "version": "0.1.0"
+  },
+  "packages": [
+    {
+      "registry_name": "npm",
+      "name": "@snapdeploy/mcp",
+      "version": "0.1.0",
+      "runtime_hint": "npx",
+      "environment_variables": [
+        {
+          "name": "SNAPDEPLOY_API_KEY",
+          "description": "Scoped personal access token (sd_pat_…) from https://snapdeploy.dev/api-keys",
+          "is_required": true,
+          "is_secret": true
+        },
+        {
+          "name": "SNAPDEPLOY_READ_ONLY",
+          "description": "Set to 1 to expose only the read tools",
+          "is_required": false
+        }
+      ]
+    }
+  ]
+}
