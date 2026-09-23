@@ -1,0 +1,25 @@
+{
+  "name": "snapdeploy",
+  "owner": {
+    "name": "AAR Labs",
+    "email": "support@snapdeploy.dev",
+    "url": "https://snapdeploy.dev"
+  },
+  "plugins": [
+    {
+      "name": "snapdeploy",
+      "source": "./",
+      "description": "Deploy to SnapDeploy from Claude Code \u2014 GitHub deploys, logs, env vars, databases and domains, with scoped tokens that can never delete anything.",
+      "category": "deployment",
+      "tags": [
+        "deploy",
+        "hosting",
+        "docker",
+        "github",
+        "mcp"
+      ],
+      "homepage": "https://snapdeploy.dev/deploy-from-claude-code",
+      "license": "MIT"
+    }
+  ]
+}

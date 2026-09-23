@@ -1,0 +1,40 @@
+{
+  "name": "snapdeploy",
+  "version": "0.1.0",
+  "description": "Deploy to SnapDeploy from Claude Code: GitHub deploys, logs, env vars, databases, domains. Agents can never delete anything; secrets never reach the model.",
+  "author": {
+    "name": "AAR Labs",
+    "email": "support@snapdeploy.dev"
+  },
+  "homepage": "https://snapdeploy.dev/deploy-from-claude-code",
+  "repository": "https://github.com/AAR-Labs/snapdeploy-mcp",
+  "license": "MIT",
+  "keywords": [
+    "deploy",
+    "hosting",
+    "mcp",
+    "snapdeploy",
+    "docker",
+    "github"
+  ],
+  "userConfig": {
+    "api_key": {
+      "type": "string",
+      "title": "SnapDeploy token",
+      "description": "A scoped personal access token (sd_pat_\u2026) from https://snapdeploy.dev/api-keys \u2014 use the deploy scope for everyday use.",
+      "sensitive": true
+    }
+  },
+  "mcpServers": {
+    "snapdeploy": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@snapdeploy/mcp"
+      ],
+      "env": {
+        "SNAPDEPLOY_API_KEY": "${user_config.api_key}"
+      }
+    }
+  }
+}

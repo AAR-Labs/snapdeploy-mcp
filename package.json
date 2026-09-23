@@ -1,8 +1,31 @@
 {
   "name": "@snapdeploy/mcp",
   "version": "0.1.0",
-  "description": "SnapDeploy MCP connector — deploy and manage your SnapDeploy containers from Claude Code, Cursor, Codex or Gemini CLI",
+  "description": "SnapDeploy MCP connector \u2014 deploy and manage your SnapDeploy containers from Claude Code, Cursor, Codex or Gemini CLI",
+  "mcpName": "io.github.somdip-2310/snapdeploy",
   "license": "MIT",
+  "author": "AAR Labs <support@snapdeploy.dev>",
+  "homepage": "https://snapdeploy.dev/docs/mcp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AAR-Labs/snapdeploy-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AAR-Labs/snapdeploy-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "snapdeploy",
+    "deploy",
+    "hosting",
+    "claude-code",
+    "cursor",
+    "codex",
+    "gemini-cli",
+    "docker",
+    "containers"
+  ],
   "type": "module",
   "bin": {
     "snapdeploy-mcp": "dist/index.js"
@@ -13,10 +36,14 @@
   ],
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
   },
   "engines": {
     "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",

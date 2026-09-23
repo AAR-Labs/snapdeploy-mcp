@@ -13,9 +13,9 @@ export function loadConfig(): Config {
     );
     process.exit(1);
   }
-  // M0 containment: default to the dev environment until the prod go-ahead
-  // (containment checklist item D4 flips this to https://snapdeploy.dev).
-  const baseUrl = (process.env.SNAPDEPLOY_BASE_URL ?? "https://containers.somdip.dev").replace(/\/+$/, "");
+  // Production by default (D4, 24 Sep 2026). SNAPDEPLOY_BASE_URL overrides for the
+  // dev environment or self-testing.
+  const baseUrl = (process.env.SNAPDEPLOY_BASE_URL ?? "https://snapdeploy.dev").replace(/\/+$/, "");
   const ro = process.env.SNAPDEPLOY_READ_ONLY ?? "";
   return { apiKey, baseUrl, readOnly: ro === "1" || /^true$/i.test(ro) };
 }
