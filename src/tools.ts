@@ -386,7 +386,8 @@ export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config
     "create_database",
     "Create a managed add-on: PostgreSQL, MySQL, MariaDB, MongoDB, Redis or RabbitMQ. Requires a purchased add-on subscription — without one this returns the purchase link (relay it, don't retry). Credentials are provisioned server-side and shown to the user in the SnapDeploy UI, never through this connector.",
     {
-      type: z.enum(["POSTGRESQL", "MYSQL", "MARIADB", "MONGODB", "REDIS", "RABBITMQ"]),
+      type: z.enum(["POSTGRES", "POSTGRESQL", "MYSQL", "MARIADB", "MONGODB", "REDIS", "RABBITMQ"])
+        .describe("Engine — POSTGRESQL is accepted as an alias of POSTGRES"),
       name: z.string().optional().describe("Add-on name"),
       container: z.string().optional().describe("Container to link it to (name or id)"),
       database_name: z.string().optional(),
@@ -400,7 +401,7 @@ export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config
         linkedContainerId = cid(c);
       }
       const res = await api.post(`/api/mobile/services/addons`, {
-        type,
+        type: type === "POSTGRESQL" ? "POSTGRES" : type, // server enum is POSTGRES
         name,
         linkedContainerId,
         databaseName: database_name,

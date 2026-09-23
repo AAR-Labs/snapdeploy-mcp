@@ -11,10 +11,13 @@ export function apiErrorToText(err: unknown, api: SnapDeployApi): string {
   const msg = b.message || b.error || "";
 
   if (err.status === 402) {
+    // Some 402 bodies carry redirectUrl instead of actionUrl (add-on create).
+    const url = b.actionUrl ?? b.redirectUrl;
+    const cta = b.actionText ?? "Purchase";
     const lines = [
       "PAYMENT REQUIRED (402) — this is a plan limit working as designed, not a bug.",
       msg && `SnapDeploy says: ${msg}`,
-      b.actionText && b.actionUrl && `→ ${b.actionText}: ${api.absolute(b.actionUrl)}`,
+      url && `→ ${cta}: ${api.absolute(url)}`,
     ];
     if (b.spareSubscriptionId) {
       lines.push(
