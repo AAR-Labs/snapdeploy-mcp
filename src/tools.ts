@@ -307,7 +307,20 @@ export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config
             size,
           });
         } catch (e) {
-          if (!(e instanceof ApiError && e.status === 404)) throw e;
+          if (!(e instanceof ApiError && e.status === 404)) {
+            // Server-side rollback (M1.3 follow-up): when the link step fails the
+            // platform removes the container it just created, so there is nothing to
+            // reuse and nothing to clean up — say so, with the link error verbatim.
+            const b: any = e instanceof ApiError ? e.body : null;
+            if (b && b.linkError !== undefined) {
+              const le = typeof b.linkError === "string" ? b.linkError : b.linkError?.error ?? b.linkError?.message ?? JSON.stringify(b.linkError);
+              const tail = b.rolledBack
+                ? "Nothing was created (the container was rolled back)."
+                : `The container ${b.name ?? b.containerId} was created but could not be removed; link it once the cause is fixed instead of deploying again.`;
+              throw new Error(`Could not link ${repo}: ${le} ${tail} Do not retry with the same input.`);
+            }
+            throw e;
+          }
         }
         if (oneCall?.containerId) {
           containerId = oneCall.containerId;
