@@ -46,6 +46,16 @@ function planLine(boot: any): string {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Container sizes. Medium/Large are size-locked server-side: they need an
+ *  unattached Always-On of the EXACT tier (auto-attach is tier-exact), else the
+ *  platform answers 402 SIZE_REQUIRES_ALWAYS_ON with the checkout link. cpu
+ *  mirrors the mobile app's memory→cpu mapping. */
+const SIZE_SPECS: Record<string, { memory: number; cpu: number; tier: string }> = {
+  small: { memory: 512, cpu: 256, tier: "HOBBY" },
+  medium: { memory: 2048, cpu: 1024, tier: "STARTER" },
+  large: { memory: 4096, cpu: 2048, tier: "PRO" },
+};
+
 export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config): void {
   /** Wrap every handler: redaction happens in the reply builders; errors become
    *  actionable text (402/429 CTAs relayed, never retried). */
@@ -220,9 +230,16 @@ export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config
       branch: z.string().optional().describe("Branch to deploy (default: repo default branch)"),
       env: z.record(z.string()).optional().describe("Environment variables to set before building (VITE_*/public-prefixed ones are applied at build time)"),
       port: z.number().int().optional().describe("App port if auto-detection needs an override"),
+      size: z
+        .enum(["small", "medium", "large"])
+        .optional()
+        .describe(
+          "Container size: small (512 MB, free) | medium (2 GB, needs a STARTER Always-On) | large (4 GB, needs a PRO Always-On). Default small. If the account lacks the entitlement the platform returns its upgrade link — relay it, do not retry or silently fall back to small."
+        ),
     },
     true,
-    async ({ repo, container, branch, env, port }) => {
+    async ({ repo, container, branch, env, port, size }) => {
+      const spec = size ? SIZE_SPECS[size] : undefined;
       const [owner, name] = repo.split("/");
       if (!owner || !name) return 'repo must be "owner/name".';
 
@@ -251,6 +268,11 @@ export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config
         if (env && Object.keys(env).length > 0) {
           await api.put(`/api/mobile/containers/${containerId}/env`, { environmentVariables: env });
         }
+        if (spec) {
+          // Size-locked server-side: an unentitled Medium/Large answers 402 with the
+          // checkout link, which the error formatter relays — we never fall back to small.
+          await api.put(`/api/mobile/containers/${containerId}`, { cpu: spec.cpu, memory: spec.memory });
+        }
         const link = await api
           .get(`/api/mobile/github/link/container/${containerId}`)
           .catch(() => null);
@@ -272,6 +294,8 @@ export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config
           name: wanted,
           image: "pending", // GitHub-deploy placeholder — the build supplies the real image
           port,
+          memory: spec?.memory,
+          cpu: spec?.cpu,
           environmentVariables: env,
         });
         containerId = created.containerId ?? created.id;
@@ -314,6 +338,7 @@ export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config
         const c = await api.get(`/api/mobile/containers/${containerId}`).catch(() => null);
         return [
           `Deployed. Live at: ${c?.url ?? "(fetch with get_status)"}`,
+          spec ? `Size: ${size} (${spec.memory} MB, ${spec.cpu} CPU units)` : "Size: small (512 MB) — pass size=\"medium\"|\"large\" if the account owns that Always-On tier.",
           capLine(capAfter),
           "Free plan note: the container sleeps after ~15 minutes idle — wake it with the wake tool, or Always-On keeps it running 24/7.",
         ]
