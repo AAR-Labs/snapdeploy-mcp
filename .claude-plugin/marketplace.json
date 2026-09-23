@@ -1,5 +1,6 @@
 {
   "name": "snapdeploy",
+  "description": "SnapDeploy plugins for Claude Code: deploy GitHub repos, read logs, set env vars, add databases and domains \u2014 with scoped tokens that can never delete anything.",
   "owner": {
     "name": "AAR Labs",
     "email": "support@snapdeploy.dev",
