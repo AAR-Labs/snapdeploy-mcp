@@ -1,6 +1,6 @@
 {
   "name": "@snapdeploy/mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "SnapDeploy MCP connector \u2014 deploy and manage your SnapDeploy containers from Claude Code, Cursor, Codex or Gemini CLI",
   "mcpName": "io.github.somdip-2310/snapdeploy",
   "license": "MIT",

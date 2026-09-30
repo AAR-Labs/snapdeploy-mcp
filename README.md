@@ -67,6 +67,8 @@ There is no delete tool, and the server refuses deletes, subscription cancellati
 password changes for every token — those need a person signed in to the dashboard or the
 mobile app.
 
+**Prebuilt images.** `deploy` builds from a connected GitHub repository; there is no image tool. To run a public Docker image, use the dashboard (Deploy Your Application → Docker Image) or `POST /api/mobile/containers` with `name`, `image`, `imageTag`, `port`, then `POST /api/mobile/containers/{containerId}/start`. Images must come from Docker Hub, ghcr.io, quay.io or public.ecr.aws, publish linux/amd64 or linux/arm64, and pass SnapDeploy's create-time policy check; a `400 Security policy violation` is final and must not be retried. Full rules: https://snapdeploy.dev/llms-full.md
+
 ## Safety model
 
 - **Nothing destructive, ever.** Even an agent that escalates to a raw API call with the
