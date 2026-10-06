@@ -1,6 +1,6 @@
 {
   "name": "snapdeploy",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Deploy to SnapDeploy from Claude Code: GitHub deploys, logs, env vars, databases, domains. Agents can never delete anything; secrets never reach the model.",
   "author": {
     "name": "AAR Labs",

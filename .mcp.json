@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "snapdeploy": {
+      "command": "npx",
+      "args": ["-y", "@snapdeploy/mcp"],
+      "env": {
+        "SNAPDEPLOY_API_KEY": "${SNAPDEPLOY_API_KEY}"
+      }
+    }
+  }
+}

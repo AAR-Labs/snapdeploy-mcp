@@ -1,0 +1,25 @@
+{
+  "name": "snapdeploy",
+  "version": "0.1.1",
+  "description": "Deploy to SnapDeploy from Cursor: GitHub deploys, logs, env vars, databases, domains. Agents can never delete anything; secrets never reach the model.",
+  "author": {
+    "name": "AAR Labs",
+    "email": "support@snapdeploy.dev"
+  },
+  "homepage": "https://snapdeploy.dev/deploy-from-cursor",
+  "repository": "https://github.com/AAR-Labs/snapdeploy-mcp",
+  "license": "MIT",
+  "keywords": ["deploy", "hosting", "mcp", "snapdeploy", "docker", "github"],
+  "mcpServers": ".mcp.json",
+  "variables": {
+    "type": "object",
+    "properties": {
+      "SNAPDEPLOY_API_KEY": {
+        "type": "string",
+        "title": "SnapDeploy token",
+        "description": "A scoped personal access token (sd_pat_…) from https://snapdeploy.dev/api-keys — use the deploy scope for everyday use."
+      }
+    },
+    "required": ["SNAPDEPLOY_API_KEY"]
+  }
+}
