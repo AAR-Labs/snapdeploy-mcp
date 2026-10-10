@@ -59,7 +59,7 @@ GitHub must be connected to SnapDeploy once (the connector returns the link if i
 | Scope | Tools |
 | --- | --- |
 | `read` | `list_apps` `get_status` `get_logs` `get_deployments` `check_quota` `list_repos` `detect_env_vars` |
-| `deploy` | `deploy` `set_env` `start_container` `stop_container` `wake_container` |
+| `deploy` | `deploy` `deploy_image` `set_env` `start_container` `stop_container` `wake_container` |
 | `manage` | `create_database` `add_domain` `assign_always_on` |
 
 Scopes nest (`read` ⊂ `deploy` ⊂ `manage`); the server enforces them before any tool runs.

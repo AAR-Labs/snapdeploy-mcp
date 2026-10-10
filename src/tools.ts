@@ -205,7 +205,7 @@ export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config
 
   tool(
     "detect_env_vars",
-    "Scan a repo for the environment variables it needs (import.meta.env / process.env usage). For known keys (Supabase etc.) the reply says where the user finds the value. Do this BEFORE the first deploy of a Lovable/Bolt/v0 export.",
+    "Scan a repo for the environment variables it needs (import.meta.env / process.env usage, .env.example, Dockerfile). For known keys (Supabase etc.) the reply says where the user finds the value. Do this BEFORE the first deploy of a Lovable/Bolt/v0 export. Rows with source DOCKERFILE and instruction ENV already have their value inside the image and follow the repository on every push: do NOT pass them to deploy's env unless the user wants a different value. Rows with instruction ARG are build arguments with a Dockerfile default; same rule.",
     {
       repo: z.string().describe("owner/name"),
       branch: z.string().optional(),
@@ -228,7 +228,7 @@ export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config
       repo: z.string().describe("owner/name of a repo on the user's connected GitHub"),
       container: z.string().optional().describe("Container name (default: repo name, lowercased)"),
       branch: z.string().optional().describe("Branch to deploy (default: repo default branch)"),
-      env: z.record(z.string()).optional().describe("Environment variables to set before building (VITE_*/public-prefixed ones are applied at build time)"),
+      env: z.record(z.string()).optional().describe("Environment variables the USER wants set (VITE_*/public-prefixed ones are applied at build time). Do not repeat values that detect_env_vars reported as Dockerfile ENV/ARG defaults — the image already carries them, and the platform drops such copies anyway."),
       port: z.number().int().optional().describe("App port if auto-detection needs an override"),
       size: z
         .enum(["small", "medium", "large"])
@@ -518,6 +518,94 @@ export function registerTools(server: McpServer, api: SnapDeployApi, cfg: Config
         containerId: cid(c),
       });
       return toJson(res);
+    }
+  );
+
+  tool(
+    "deploy_image",
+    "Deploy a Docker image from a LOCAL `docker save` file (.tar, .tar.gz or .tgz) on this machine. The file is uploaded straight to SnapDeploy's storage with a presigned URL (never through the API), loaded, pushed to the private registry and started. The image must be built for linux/arm64 (docker buildx build --platform linux/arm64); an amd64 image fails at build time with a rebuild hint. Free accounts may upload up to 2 GB; any Always-On subscription raises the cap (the platform returns its store link on 402 — relay it, do not retry). Uses one deploy-limit unit like other deploys.",
+    {
+      path: z.string().describe("Absolute path of the docker-save file on this machine"),
+      container: z.string().optional().describe("Container name (default: derived from the file name)"),
+      port: z.number().int().optional().describe("Port the app listens on inside the container (default 8080)"),
+      size: z.enum(["small", "medium", "large"]).optional().describe("small (512 MB, free) | medium (2 GB, STARTER Always-On) | large (4 GB, PRO Always-On)"),
+    },
+    true,
+    async ({ path, container, port, size }) => {
+      const fsMod: any = await import("node:fs");
+      const pathMod: any = await import("node:path");
+      let stat: any;
+      try {
+        stat = fsMod.statSync(path);
+      } catch {
+        return `No file at ${path}. Pass the absolute path of a docker-save file (.tar, .tar.gz, .tgz).`;
+      }
+      if (!stat.isFile()) return `${path} is not a file.`;
+      const fileName = pathMod.basename(path);
+      if (!/\.(tar|tar\.gz|tgz)$/i.test(fileName)) return `${fileName} is not a .tar, .tar.gz or .tgz file (create one with: docker save -o app.tar <image>).`;
+      const contentType = /\.(tgz|gz)$/i.test(fileName) ? "application/gzip" : "application/x-tar";
+      const wanted = (container ?? fileName.replace(/\.(tar\.gz|tgz|tar)$/i, "").replace(/[-_.]?v?\d+(\.\d+)*$/i, ""))
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "");
+      const spec = size === "medium" ? { memory: 2048, cpu: 1024 } : size === "large" ? { memory: 4096, cpu: 2048 } : { memory: 512, cpu: 256 };
+
+      // 1. presigned URL (the platform refuses too-big files here, with a 402 store link when an Always-On would allow it)
+      const pre = await api.get(
+        `/api/mobile/deploy/image-upload-url?filename=${encodeURIComponent(fileName)}&contentType=${encodeURIComponent(contentType)}&size=${stat.size}`
+      );
+
+      // 2. PUT the file straight to storage (streams; nothing is read into memory)
+      let body: any;
+      let extra: any = {};
+      if (typeof fsMod.openAsBlob === "function") {
+        body = await fsMod.openAsBlob(path, { type: contentType });
+      } else {
+        body = fsMod.createReadStream(path);
+        extra = { duplex: "half" };
+      }
+      const put = await fetch(pre.uploadUrl, { method: "PUT", headers: { "Content-Type": contentType }, body, ...extra } as any);
+      if (!put.ok) return `The upload to storage failed (HTTP ${put.status}). Nothing was deployed; try again.`;
+
+      // 3. deploy from storage
+      const started = await api.post(`/api/mobile/deploy/image`, {
+        s3Key: pre.s3Key,
+        containerName: wanted,
+        port: port ?? 8080,
+        memory: spec.memory,
+        cpu: spec.cpu,
+      });
+
+      // The push + start takes 1–4 minutes; watch the container itself.
+      const deadline = Date.now() + 7 * 60_000;
+      let c: any = null;
+      while (Date.now() < deadline) {
+        await sleep(6000);
+        c = await resolveContainer(api, wanted).catch(() => null);
+        const s = c?.status;
+        if (s === "RUNNING" || s === "FAILED") break;
+      }
+      const capAfter = await api.get("/api/mobile/deploy-cap").catch(() => null);
+      if (c?.status === "RUNNING") {
+        return [
+          `Deployed ${fileName} (${(stat.size / 1048576).toFixed(0)} MB). Live at: ${c.url ?? "(fetch with get_status)"}`,
+          `Container: ${wanted}, port ${port ?? 8080}, size ${size ?? "small"}.`,
+          capLine(capAfter),
+        ]
+          .filter(Boolean)
+          .join("\n");
+      }
+      if (c?.status === "FAILED") {
+        return [
+          `The image push or start FAILED for ${wanted}. Common cause: the image is not linux/arm64 — rebuild with docker buildx build --platform linux/arm64 and save again.`,
+          `Deployment ${started?.deploymentId ?? "(unknown)"}; call get_deployments with container "${wanted}" for the build log.`,
+          capLine(capAfter),
+        ]
+          .filter(Boolean)
+          .join("\n");
+      }
+      return `Upload done; the push and start are still running (deployment ${started?.deploymentId ?? "(unknown)"}). Check get_status for "${wanted}" in a minute — do not deploy again meanwhile.`;
     }
   );
 }
