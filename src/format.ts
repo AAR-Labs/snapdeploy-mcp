@@ -67,6 +67,41 @@ export function apiErrorToText(err: unknown, api: SnapDeployApi): string {
     return "UNAUTHORIZED (401): the SNAPDEPLOY_API_KEY is missing, wrong or revoked. The user can check it at /api-keys.";
   }
 
+  // 14 Oct 2026: the platform's container action guard answers 409 with a reason code.
+  // Two families: a live operation (wait, then retry) and a standing state rule (never retry
+  // the same call — use the right tool instead).
+  if (err.status === 409) {
+    const reason = String(b.reason ?? b.errorCode ?? "");
+    const stateRules: Record<string, string> = {
+      CONTAINER_NOT_STOPPED:
+        "Start and wake work only on a STOPPED container. Check get_status; if it is already RUNNING there is nothing to do; if it is FAILED, use deploy to rebuild it.",
+      CONTAINER_NOT_RUNNING:
+        "Restart works only on a RUNNING container. Check get_status; use start_container for a stopped one, or deploy to rebuild a FAILED one.",
+    };
+    if (stateRules[reason]) {
+      return [
+        `REFUSED (409, ${reason}) — a state rule, not a transient error.`,
+        msg && `SnapDeploy says: ${msg}`,
+        stateRules[reason],
+        "Do NOT retry the same call.",
+      ]
+        .filter(Boolean)
+        .join("\n");
+    }
+    const busy = ["DEPLOYMENT_IN_PROGRESS", "CONTAINER_CREATING", "CONTAINER_STARTING", "CONTAINER_STOPPING", "CONTAINER_DELETING"];
+    if (busy.includes(reason)) {
+      const wait = typeof b.retryAfterSeconds === "number" ? b.retryAfterSeconds : 60;
+      return [
+        `BUSY (409, ${reason}) — the container is mid-operation; this clears by itself.`,
+        msg && `SnapDeploy says: ${msg}`,
+        `Wait about ${wait} seconds, check get_status / get_deployments, then try again. Do not tight-loop; do not try another action to force it.`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+    }
+    return `CONFLICT (409): ${msg || "the container is not in a state that allows this action"}. Check get_status before retrying.`;
+  }
+
   const detail = typeof b === "object" ? JSON.stringify(b).slice(0, 800) : String(b);
   return `SnapDeploy API error ${err.status} on ${err.path}: ${msg || detail}`;
 }
